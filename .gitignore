@@ -1,0 +1,5 @@
+/dist/
+/work/
+*.tar.gz
+*.sha256
+*.sha512

@@ -1,0 +1,237 @@
+name: Build and release PVE LXC templates
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: System and version
+        required: true
+        type: choice
+        default: debian-13
+        options:
+          - all
+          - debian-12
+          - debian-13
+          - ubuntu-22.04
+          - ubuntu-24.04
+          - ubuntu-26.04
+          - almalinux-8
+          - almalinux-9
+          - almalinux-10
+          - rockylinux-8
+          - rockylinux-9
+          - rockylinux-10
+          - centos-stream-9
+          - centos-stream-10
+          - alpine-3.21
+          - alpine-3.22
+          - alpine-3.23
+          - alpine-3.24
+      architecture:
+        description: CPU architecture
+        required: true
+        type: choice
+        default: amd64
+        options:
+          - amd64
+          - arm64
+          - both
+      profile:
+        description: Software package profile
+        required: true
+        type: choice
+        default: full
+        options:
+          - minimal
+          - standard
+          - full
+      mirror:
+        description: Domestic package mirror written into the template
+        required: true
+        type: choice
+        default: ustc
+        options:
+          - ustc
+          - tuna
+          - aliyun
+      release_tag:
+        description: Release tag; use auto to generate one
+        required: true
+        type: string
+        default: auto
+
+permissions:
+  contents: write
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+concurrency:
+  group: pve-lxc-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      release_tag: ${{ steps.matrix.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: matrix
+        name: Prepare build matrix
+        env:
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_ARCH: ${{ inputs.architecture }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          from pathlib import Path
+
+          targets = json.loads(Path("config/targets.json").read_text())
+          requested = os.environ["INPUT_TARGET"]
+          arch_input = os.environ["INPUT_ARCH"]
+          tag_input = os.environ["INPUT_TAG"].strip()
+
+          selected = targets if requested == "all" else [x for x in targets if x["id"] == requested]
+          if not selected:
+              raise SystemExit(f"Unknown target: {requested}")
+
+          arches = ["amd64", "arm64"] if arch_input == "both" else [arch_input]
+          include = []
+          for target in selected:
+              for arch in arches:
+                  include.append({"target": target["id"], "arch": arch})
+
+          if tag_input.lower() == "auto":
+              stamp = datetime.datetime.now(datetime.UTC).strftime("%Y.%m.%d-%H%M%S")
+              tag = f"pve-lxc-{stamp}"
+          else:
+              tag = tag_input
+
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as fh:
+              fh.write("matrix=" + json.dumps({"include": include}, separators=(",", ":")) + "\n")
+              fh.write("release_tag=" + tag + "\n")
+          PY
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+
+    name: ${{ matrix.target }} / ${{ matrix.arch }} / ${{ inputs.profile }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check repository scripts
+        run: ./tests/static.sh
+
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            acl attr bash ca-certificates curl debootstrap dnf file findutils \
+            gawk git gnupg gzip jq qemu-user-static binfmt-support rpm tar \
+            util-linux xz-utils zstd
+          sudo update-binfmts --enable qemu-aarch64 || true
+
+      - name: Build template
+        run: |
+          sudo -E ./bin/build.sh \
+            --target "${{ matrix.target }}" \
+            --arch "${{ matrix.arch }}" \
+            --profile "${{ inputs.profile }}" \
+            --mirror "${{ inputs.mirror }}" \
+            --output "$GITHUB_WORKSPACE/dist"
+
+      - name: Show output
+        run: ls -lh dist/
+
+      - name: Upload build result
+        uses: actions/upload-artifact@v7
+        with:
+          name: template-${{ matrix.target }}-${{ matrix.arch }}-${{ inputs.profile }}
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    name: Publish GitHub Release
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all templates
+        uses: actions/download-artifact@v8
+        with:
+          pattern: template-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate combined checksums and notes
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_ARCH: ${{ inputs.architecture }}
+          INPUT_PROFILE: ${{ inputs.profile }}
+          INPUT_MIRROR: ${{ inputs.mirror }}
+        run: |
+          set -euo pipefail
+          cd dist
+          find . -maxdepth 1 -type f -name '*.tar.gz' -printf '%f\0' \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS
+          find . -maxdepth 1 -type f -name '*.tar.gz' -printf '%f\0' \
+            | sort -z \
+            | xargs -0 sha512sum > SHA512SUMS
+
+          {
+            echo "# PVE LXC template build"
+            echo
+            echo "- Target: \`$INPUT_TARGET\`"
+            echo "- Architecture: \`$INPUT_ARCH\`"
+            echo "- Package profile: \`$INPUT_PROFILE\`"
+            echo "- Domestic mirror: \`$INPUT_MIRROR\`"
+            echo "- Workflow run: \`${GITHUB_RUN_ID}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo
+            echo "## Files"
+            echo
+            find . -maxdepth 1 -type f -name '*.tar.gz' -printf '%f\n' | sort | sed 's/^/- `/' | sed 's/$/`/'
+            echo
+            echo "Every template has its own manifest and installed-package list."
+          } > RELEASE_NOTES.md
+
+      - name: Create or update Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find dist -maxdepth 1 -type f ! -name RELEASE_NOTES.md -print0 | sort -z)
+          ((${#assets[@]} > 0))
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" --clobber "${assets[@]}"
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TAG" \
+              --notes-file dist/RELEASE_NOTES.md
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TAG" \
+              --notes-file dist/RELEASE_NOTES.md
+          fi

@@ -1,0 +1,121 @@
+[
+  {
+    "id": "debian-12",
+    "family": "deb",
+    "distro": "debian",
+    "version": "12",
+    "codename": "bookworm"
+  },
+  {
+    "id": "debian-13",
+    "family": "deb",
+    "distro": "debian",
+    "version": "13",
+    "codename": "trixie"
+  },
+  {
+    "id": "ubuntu-22.04",
+    "family": "deb",
+    "distro": "ubuntu",
+    "version": "22.04",
+    "codename": "jammy"
+  },
+  {
+    "id": "ubuntu-24.04",
+    "family": "deb",
+    "distro": "ubuntu",
+    "version": "24.04",
+    "codename": "noble"
+  },
+  {
+    "id": "ubuntu-26.04",
+    "family": "deb",
+    "distro": "ubuntu",
+    "version": "26.04",
+    "codename": "resolute"
+  },
+  {
+    "id": "almalinux-8",
+    "family": "rhel",
+    "distro": "almalinux",
+    "version": "8",
+    "codename": ""
+  },
+  {
+    "id": "almalinux-9",
+    "family": "rhel",
+    "distro": "almalinux",
+    "version": "9",
+    "codename": ""
+  },
+  {
+    "id": "almalinux-10",
+    "family": "rhel",
+    "distro": "almalinux",
+    "version": "10",
+    "codename": ""
+  },
+  {
+    "id": "rockylinux-8",
+    "family": "rhel",
+    "distro": "rockylinux",
+    "version": "8",
+    "codename": ""
+  },
+  {
+    "id": "rockylinux-9",
+    "family": "rhel",
+    "distro": "rockylinux",
+    "version": "9",
+    "codename": ""
+  },
+  {
+    "id": "rockylinux-10",
+    "family": "rhel",
+    "distro": "rockylinux",
+    "version": "10",
+    "codename": ""
+  },
+  {
+    "id": "centos-stream-9",
+    "family": "rhel",
+    "distro": "centos-stream",
+    "version": "9",
+    "codename": ""
+  },
+  {
+    "id": "centos-stream-10",
+    "family": "rhel",
+    "distro": "centos-stream",
+    "version": "10",
+    "codename": ""
+  },
+  {
+    "id": "alpine-3.21",
+    "family": "alpine",
+    "distro": "alpine",
+    "version": "3.21",
+    "codename": ""
+  },
+  {
+    "id": "alpine-3.22",
+    "family": "alpine",
+    "distro": "alpine",
+    "version": "3.22",
+    "codename": ""
+  },
+  {
+    "id": "alpine-3.23",
+    "family": "alpine",
+    "distro": "alpine",
+    "version": "3.23",
+    "codename": ""
+  },
+  {
+    "id": "alpine-3.24",
+    "family": "alpine",
+    "distro": "alpine",
+    "version": "3.24",
+    "codename": ""
+  }
+]
