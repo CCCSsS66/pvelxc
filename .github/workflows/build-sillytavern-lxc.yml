@@ -1,0 +1,72 @@
+name: Build and release SillyTavern LXC
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: GitHub Release tag for the LXC image
+        required: true
+        default: v1.0.0
+        type: string
+      sillytavern_version:
+        description: SillyTavern release tag, without a leading v
+        required: true
+        default: 1.19.1
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lxc-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEBIAN_SUITE: trixie
+      NODE_VERSION: v24.22.3
+      ST_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.sillytavern_version || '1.19.1' }}
+      IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set archive timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes debootstrap debian-archive-keyring zstd
+
+      - name: Build Proxmox LXC template
+        run: sudo --preserve-env=DEBIAN_SUITE,NODE_VERSION,ST_VERSION,IMAGE_TAG,SOURCE_DATE_EPOCH ./scripts/build-sillytavern-lxc.sh "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload template to workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sillytavern-lxc-${{ env.IMAGE_TAG }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.IMAGE_TAG }}
+          name: SillyTavern LXC ${{ env.IMAGE_TAG }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
+          body: |
+            Proxmox VE LXC template: Debian ${{ env.DEBIAN_SUITE }} amd64 with SillyTavern ${{ env.ST_VERSION }}.
+
+            After importing and starting the container, open `http://CONTAINER_IPV4:8000`.
+            The first-boot Basic Auth password is available inside the container at `/root/sillytavern-credentials.txt`.
+            IPv6 is disabled in the guest sysctl settings and blocked for the SillyTavern systemd service.

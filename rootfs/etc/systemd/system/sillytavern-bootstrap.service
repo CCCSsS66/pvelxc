@@ -1,0 +1,11 @@
+[Unit]
+Description=Generate first-boot SillyTavern credentials
+Before=sillytavern.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sillytavern-firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

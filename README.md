@@ -157,3 +157,29 @@ debian-13-pve-lxc-full-amd64.sha512
 Release 还会额外生成汇总的 `SHA256SUMS` 和 `SHA512SUMS`。
 
 GitHub Release 单文件限制为 2 GiB，打包脚本会在上传前检查并阻止超限模板发布。
+
+## SillyTavern IPv4-only LXC
+
+仓库同时提供独立的 SillyTavern Debian 13 amd64 LXC 构建工作流：
+
+```text
+.github/workflows/build-sillytavern-lxc.yml
+scripts/build-sillytavern-lxc.sh
+```
+
+该工作流使用 Debian `debootstrap` 构建 Debian 13 rootfs，安装固定版本 Node.js 和 SillyTavern，生成 Proxmox VE 可导入的 `.tar.zst` 模板，并自动发布 GitHub Release。默认版本为 SillyTavern `1.19.1`，也可以在 Actions 页面手动运行时指定版本。
+
+镜像内置以下配置：
+
+- SillyTavern 监听 IPv4 `0.0.0.0:8000`。
+- IPv6 协议、IPv6 sysctl 和 IPv6 socket 均关闭。
+- PVE 使用 `/etc/network/interfaces`、ifupdown2 和 DHCP 客户端注入 IPv4 配置。
+- 首次启动生成随机 Basic Auth 密码，凭据保存到 `/root/sillytavern-credentials.txt`。
+
+创建 CT 时在 PVE 页面配置 IPv4，IPv6 留空。启动后使用以下地址访问：
+
+```text
+http://CONTAINER_IPV4:8000
+```
+
+公网直连需要容器拥有可入站的公网 IPv4，或者在路由器上将 TCP `8000` 转发到容器的 IPv4 `8000` 端口。模板使用 HTTP 直连，公网环境下 Basic Auth 凭据会以明文 HTTP 传输。

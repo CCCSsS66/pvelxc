@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ENV_DIR=/etc/sillytavern
+ENV_FILE="$ENV_DIR/sillytavern.env"
+CREDENTIALS=/root/sillytavern-credentials.txt
+
+install -d -o root -g root -m 0700 "$ENV_DIR"
+
+if [[ ! -s "$ENV_FILE" ]]; then
+    password="$(openssl rand -hex 32)"
+    umask 077
+    printf 'SILLYTAVERN_BASICAUTHUSER_USERNAME=admin\nSILLYTAVERN_BASICAUTHUSER_PASSWORD=%s\n' \
+        "$password" > "$ENV_FILE"
+fi
+
+if [[ ! -s "$CREDENTIALS" ]]; then
+    username="$(sed -n 's/^SILLYTAVERN_BASICAUTHUSER_USERNAME=//p' "$ENV_FILE" | head -n 1)"
+    password="$(sed -n 's/^SILLYTAVERN_BASICAUTHUSER_PASSWORD=//p' "$ENV_FILE" | head -n 1)"
+    umask 077
+    printf 'SillyTavern Basic Auth credentials\nUsername: %s\nPassword: %s\n' \
+        "$username" "$password" > "$CREDENTIALS"
+    chmod 0600 "$CREDENTIALS"
+fi
+
+chmod 0600 "$ENV_FILE"

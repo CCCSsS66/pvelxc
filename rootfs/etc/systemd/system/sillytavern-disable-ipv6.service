@@ -1,0 +1,14 @@
+[Unit]
+Description=Disable IPv6 in the container network namespace
+DefaultDependencies=no
+After=systemd-sysctl.service
+Before=network-pre.target sillytavern.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -ec 'if [ -d /proc/sys/net/ipv6/conf ]; then for key in /proc/sys/net/ipv6/conf/*/disable_ipv6; do [ -e "$key" ] && echo 1 > "$key" 2>/dev/null || true; done; fi'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
